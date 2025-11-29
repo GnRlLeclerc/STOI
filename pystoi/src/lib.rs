@@ -8,11 +8,11 @@ mod stoi {
 
     #[pyfunction]
     fn stoi(
-        x: PyReadonlyArray1<'_, f32>,
-        y: PyReadonlyArray1<'_, f32>,
+        x: PyReadonlyArray1<'_, f64>,
+        y: PyReadonlyArray1<'_, f64>,
         fs_sig: u32,
         extended: bool,
-    ) -> PyResult<f32> {
+    ) -> PyResult<f64> {
         Ok(stoilib::stoi(x.as_array(), y.as_array(), fs_sig, extended))
     }
 }
