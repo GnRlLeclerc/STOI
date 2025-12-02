@@ -11,7 +11,7 @@ const REJECTION_DB: f64 = 60.0;
 /// Generate an ideal sinc low-pass filter with normalized cutoff frequency f.
 /// Returns an iterator over the filter coefficients to avoid allocation.
 fn ideal_sinc(f: f64, half_length: usize) -> impl Iterator<Item = f64> {
-    (-(half_length as isize)..=half_length as isize).map(move |n| {
+    (-(half_length as isize)..half_length as isize + 1).map(move |n| {
         if n == 0 {
             2.0 * f
         } else {
@@ -62,16 +62,22 @@ pub fn resample(x: ArrayView1<'_, f64>, from: u32, to: u32) -> Array1<f64> {
     // Compute the filter
     let filter_half_length = ((REJECTION_DB - 8.0) / (28.714 * roll_off_width)).ceil() as u32;
     let beta = 0.1102 * (REJECTION_DB - 8.7);
-    let filter = apodized_kaiser_window(
+    let mut filter = apodized_kaiser_window(
         stopband_cutoff_freq,
         beta,
         filter_half_length as usize,
         up as f64,
     );
+    filter /= filter.sum();
 
     // Create target array
     let target_len = x.len() as u32 * up / down;
     let mut target = Array1::<f64>::zeros(target_len as usize);
+
+    // Compute polyphase components
+    let polyphases: Vec<_> = (0..up)
+        .map(|offset| filter.slice(s![offset as isize..;up as isize]))
+        .collect();
 
     for i in 0..target_len {
         // Compute the indices of the target value and filter boundaries
