@@ -17,3 +17,5 @@ pub const FFT_BINS: usize = FFT_LENGTH / 2 + 1;
 pub const NUM_BANDS: usize = 15; // Amount of 13 octave band
 
 pub const SEGMENT_LENGTH: usize = 30;
+
+pub const BETA: f64 = -15.0; // Lower SDR bound
