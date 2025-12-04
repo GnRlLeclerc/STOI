@@ -15,4 +15,5 @@ pub const FFT_LENGTH: usize = 512;
 pub const FFT_BINS: usize = FFT_LENGTH / 2 + 1;
 
 pub const NUM_BANDS: usize = 15; // Amount of 13 octave band
-pub const MIN_FREQ: usize = 150; // Center frequency of 1st octave band (Hz)
+
+pub const SEGMENT_LENGTH: usize = 30;

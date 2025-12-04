@@ -5,7 +5,7 @@ use ndarray::{Zip, prelude::*};
 use ndarray_stats::QuantileExt;
 use windowfunctions::{Symmetry, WindowFunction, window};
 
-use crate::constants::{DYNAMIC_RANGE, FRAME_LENGTH, HOP_LENGTH};
+use crate::constants::{DYNAMIC_RANGE, FRAME_LENGTH, HOP_LENGTH, SEGMENT_LENGTH};
 
 struct FrameWindows {
     /// Trimmed hann window
@@ -144,4 +144,25 @@ pub fn process_frames(
     count -= 1; // account for the discarded last frame
 
     (x_frames, y_frames, mask, count)
+}
+
+/// Slice octave band spectrogram into overlapping segments
+/// Shapes: (bands, frames) -> (segments, bands, N)
+///
+/// We copy the segments into a new array because we need to perform per-segment
+/// mutating operations later.
+pub fn segments(x_bands: ArrayView2<'_, f64>) -> Array3<f64> {
+    let n_bands = x_bands.shape()[0];
+    let n_frames = x_bands.shape()[1];
+    let n_segments = n_frames.saturating_sub(SEGMENT_LENGTH) + 1;
+
+    let mut segments = Array3::<f64>::zeros((n_segments, n_bands, SEGMENT_LENGTH));
+
+    for i in 0..n_segments {
+        let segment = x_bands.slice(s![.., i..(i + SEGMENT_LENGTH)]);
+        let mut target = segments.slice_mut(s![i, .., ..]);
+        target.assign(&segment);
+    }
+
+    segments
 }

@@ -4,6 +4,7 @@ mod constants;
 mod frames;
 mod octave;
 mod resample;
+mod standard;
 mod stft;
 
 use ndarray::prelude::*;
