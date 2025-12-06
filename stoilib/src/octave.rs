@@ -1,6 +1,6 @@
 //! Third octave bands
 
-use ndarray::{Zip, prelude::*};
+use faer::prelude::*;
 
 use crate::constants::NUM_BANDS;
 
@@ -25,19 +25,25 @@ const OCTAVE_BANDS: [(usize, usize); NUM_BANDS] = [
 ];
 
 /// Merge FFT spectrogram into octave bands specified by the index ranges in `OCTAVE_BANDS`.
-pub fn compute_octave_bands(spectrogram: ArrayView2<'_, f64>) -> Array2<f64> {
-    let num_frames = spectrogram.shape()[0];
-    let mut band_spectrogram = Array2::<f64>::zeros((num_frames, NUM_BANDS));
+/// Input spectrograms have shape (FFT_BINS, num_frames).
+/// The merged output has shape (NUM_BANDS, num_frames).
+pub fn compute_octave_bands(spectrogram: MatRef<f64>) -> Mat<f64> {
+    let num_frames = spectrogram.ncols();
+    let mut band_spectrogram = Mat::<f64>::zeros(NUM_BANDS, num_frames);
 
     // Iterate over each frame
-    Zip::from(spectrogram.rows())
-        .and(band_spectrogram.rows_mut())
-        .for_each(|rfft, mut bands| {
-            // Iterate over each band and compute its energy
-            for (band, &(start, end)) in bands.iter_mut().zip(OCTAVE_BANDS.iter()) {
-                let sum_squares: f64 = rfft.slice(s![start..end]).iter().map(|&v| v * v).sum();
-                *band = sum_squares.sqrt();
-            }
+    spectrogram
+        .col_iter()
+        .zip(band_spectrogram.col_iter_mut())
+        .for_each(|(rfft, bands)| {
+            bands
+                .iter_mut()
+                .zip(OCTAVE_BANDS.iter())
+                .for_each(|(band, &(start, end))| {
+                    // The spectrogram contains squared magnitudes,
+                    // so we just need to sum and sqrt instead of norm_l2
+                    *band = rfft.subrows(start, end - start).sum().sqrt();
+                });
         });
 
     band_spectrogram

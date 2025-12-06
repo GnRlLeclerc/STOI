@@ -1,53 +1,62 @@
 //! Standard STOI computation from octave segment spectrograms
 
-use ndarray::{Zip, prelude::*};
+use std::f64::EPSILON;
 
-use crate::constants::{BETA, NUM_BANDS};
+use faer::prelude::*;
+
+use crate::constants::{BETA, SEGMENT_LENGTH};
 
 /// Compute the standard STOI from octave segment spectrograms of the clean and processed signals.
-/// The segments have shapes (num_segments, num_bands, segment_length).
-pub fn from_segments(
-    mut x_segments: ArrayViewMut3<f64>,
-    mut y_segments: ArrayViewMut3<f64>,
-) -> f64 {
+/// The segments have shapes (segment_length, num_segments * num_bands).
+pub fn from_segments(x_segments: MatMut<f64>, y_segments: MatMut<f64>) -> f64 {
     let clip_value = 10.0_f64.powf(-BETA / 20.0);
-    let num_segments = x_segments.shape()[0];
+    let n = x_segments.ncols();
+
+    let mut similarity = 0.0;
 
     // Perform the per-segment processing
-    let similarity = Zip::from(x_segments.outer_iter_mut())
-        .and(y_segments.outer_iter_mut())
-        .fold(0.0, |acc, mut x_bands, mut y_bands| {
-            acc + Zip::from(x_bands.outer_iter_mut())
-                .and(y_bands.outer_iter_mut())
-                .fold(0.0, |acc, mut x_segment, mut y_segment| {
-                    // Normalize y so that it has the same norm as x
-                    let x_norm = x_segment.iter().map(|v| v * v).sum::<f64>().sqrt();
-                    let y_norm = y_segment.iter().map(|v| v * v).sum::<f64>().sqrt();
+    x_segments
+        .col_iter_mut()
+        .zip(y_segments.col_iter_mut())
+        .for_each(|(mut x_segment, mut y_segment)| {
+            // Normalize y so that it has the same norm as x
+            // and then clip y
+            let ratio = x_segment.norm_l2() / (y_segment.norm_l2() + EPSILON);
+            let mut x_sum = 0.0;
+            let mut y_sum = 0.0;
+            zip!(&x_segment, &mut y_segment).for_each(|unzip!(x, y)| {
+                *y = (*y * ratio).min(x * (1.0 + clip_value));
+                x_sum += x;
+                y_sum += *y;
+            });
 
-                    y_segment *= x_norm / (y_norm + f64::EPSILON);
+            // Substract means
+            let x_mean = x_sum / SEGMENT_LENGTH as f64;
+            let y_mean = y_sum / SEGMENT_LENGTH as f64;
 
-                    // Clip y
-                    x_segment
-                        .iter()
-                        .zip(y_segment.iter_mut())
-                        .for_each(|(x, y)| {
-                            *y = y.min(x * (1.0 + clip_value));
-                        });
+            // Subtract mean and start computing resulting norm
+            // at the same time
+            let mut x_sq_sum = 0.0;
+            let mut y_sq_sum = 0.0;
+            zip!(&mut x_segment, &mut y_segment).for_each(|unzip!(x, y)| {
+                *x -= x_mean;
+                *y -= y_mean;
+                x_sq_sum += x.powi(2);
+                y_sq_sum += y.powi(2);
+            });
 
-                    // Substract means
-                    x_segment -= x_segment.mean().unwrap();
-                    y_segment -= y_segment.mean().unwrap();
+            let x_norm = x_sq_sum.sqrt() + EPSILON;
+            let y_norm = y_sq_sum.sqrt() + EPSILON;
 
-                    // Divide by norms
-                    let x_norm = x_segment.iter().map(|v| v * v).sum::<f64>().sqrt() + f64::EPSILON;
-                    let y_norm = y_segment.iter().map(|v| v * v).sum::<f64>().sqrt() + f64::EPSILON;
-                    x_segment /= x_norm;
-                    y_segment /= y_norm;
+            // Compute pre-normalization similarity
+            let mut s = 0.0;
+            zip!(&x_segment, &y_segment).for_each(|unzip!(x, y)| {
+                s += x * y;
+            });
 
-                    // Compute similarity
-                    acc + &x_segment.dot(&y_segment)
-                })
+            // Aggregate similarity and apply normalization
+            similarity += s / (x_norm * y_norm);
         });
 
-    similarity / (num_segments * NUM_BANDS) as f64
+    similarity / n as f64
 }

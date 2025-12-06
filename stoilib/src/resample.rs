@@ -2,9 +2,17 @@
 
 use std::f64::consts::PI;
 
-use ndarray::prelude::*;
+use dashmap::DashMap;
+use faer::{ColRef, Row};
+use lazy_static::lazy_static;
 use num::integer;
 use windowfunctions::{Symmetry, WindowFunction, window};
+
+lazy_static! {
+    /// Cache precomputed filter contiguous phases.
+    /// The keys are input sampling frequencies
+    static ref WINDOWS: DashMap<u32, Vec<Row<f64>>> = DashMap::new();
+}
 
 const REJECTION_DB: f64 = 60.0;
 
@@ -31,30 +39,19 @@ fn kaiser(beta: f32, half_length: usize) -> impl Iterator<Item = f64> {
 }
 
 /// Generates an apodized Kaiser window collected into an Array1.
-fn apodized_kaiser_window(f: f64, beta: f64, half_length: usize) -> Array1<f64> {
+fn apodized_kaiser_window(f: f64, beta: f64, half_length: usize) -> Row<f64> {
     let sinc_iter = ideal_sinc(f, half_length);
     let kaiser_iter = kaiser(beta as f32, half_length);
 
-    Array1::from_iter(
-        sinc_iter
-            .zip(kaiser_iter)
-            .map(|(sinc, kaiser)| sinc * kaiser),
-    )
+    sinc_iter
+        .zip(kaiser_iter)
+        .map(|(sinc, kaiser)| sinc * kaiser)
+        .collect()
 }
 
-/// Polyphase resampling.
-///
-/// Some information for this doc (reformulate and clean this up later):
-/// - zero-phase => the window is symmetric (does not introduce any shift)
-/// - FIR filter => finite impulse response. Basically, the window is of finite length.
-/// - low-pass => when upsampling by inserting zeros, if we upsample *n, we create
-///   high frequency signals. The window must smooth this out and remove these high frequencies
-pub fn resample(x: ArrayView1<'_, f64>, from: u32, to: u32) -> Array1<f64> {
-    // Compute upsampling and dowsampling ratios
-    let gcd = integer::gcd(from, to);
-    let up = to / gcd;
-    let down = from / gcd;
-
+/// Generates the different contiguous filter phases for efficient
+/// computation.
+fn generate_filter_phases(up: u32, down: u32) -> Vec<Row<f64>> {
     let stopband_cutoff_freq = 1.0 / (2.0 * up.max(down) as f64);
     let roll_off_width = stopband_cutoff_freq / 10.0;
 
@@ -65,24 +62,44 @@ pub fn resample(x: ArrayView1<'_, f64>, from: u32, to: u32) -> Array1<f64> {
         apodized_kaiser_window(stopband_cutoff_freq, beta, filter_half_length as usize);
     filter /= filter.sum();
 
+    let up = up as usize;
+    (0..up)
+        .map(|phase| filter.iter().skip(phase).step_by(up).cloned().collect())
+        .collect()
+}
+
+/// Polyphase resampling.
+///
+/// Some information for this doc (reformulate and clean this up later):
+/// - zero-phase => the window is symmetric (does not introduce any shift)
+/// - FIR filter => finite impulse response. Basically, the window is of finite length.
+/// - low-pass => when upsampling by inserting zeros, if we upsample *n, we create
+///   high frequency signals. The window must smooth this out and remove these high frequencies
+pub fn resample(x: &[f64], from: u32, to: u32) -> Vec<f64> {
+    // Compute upsampling and dowsampling ratios
+    let gcd = integer::gcd(from, to);
+    let up = to / gcd;
+    let down = from / gcd;
+
     // Create target array
     let target_len = x.len() as u32 * up / down;
-    let mut target = Array1::<f64>::zeros(target_len as usize);
+    let mut target = vec![0.0; target_len as usize];
 
-    // DEBUG: implementing the naive method to see if I'm correct
-    let mut upsampled =
-        Array1::<f64>::zeros(x.len() * up as usize + 2 * filter_half_length as usize);
-    // fill the upsampled array
-    for (i, &val) in x.iter().enumerate() {
-        upsampled[i * up as usize + filter_half_length as usize] = val;
-    }
+    // Get the filters
+    // If filters are missing, they are inserted and fetched
+    // again to drop the exclusive mutable ref held by entry
+    WINDOWS
+        .entry(from)
+        .or_insert(generate_filter_phases(up, down));
+    let filters = WINDOWS.get(&from).unwrap();
+
+    // View x as a faer Col for fast dotting with filters
+    let x = ColRef::from_slice(x);
 
     for (i, y) in target.iter_mut().enumerate() {
-        let upsampled_index = i * down as usize + filter_half_length as usize;
-        *y = filter.dot(
-            &upsampled.slice(s![upsampled_index as isize - filter_half_length as isize
-                ..upsampled_index as isize + filter_half_length as isize + 1]),
-        ) * up as f64;
+        let filter = &filters[i]; // TODO: get the phase instead
+
+        *y = filter * x; // TODO: proper slicing
     }
 
     target
