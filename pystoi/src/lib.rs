@@ -11,7 +11,7 @@ mod stoi {
     fn stoi(
         x: PyReadonlyArray1<'_, f64>,
         y: PyReadonlyArray1<'_, f64>,
-        fs_sig: u32,
+        fs_sig: usize,
         extended: bool,
     ) -> PyResult<f64> {
         match stoilib::stoi(
@@ -29,7 +29,7 @@ mod stoi {
     fn par_stoi(
         x: PyReadonlyArray2<'_, f64>,
         y: PyReadonlyArray2<'_, f64>,
-        fs_sig: u32,
+        fs_sig: usize,
         extended: bool,
     ) -> PyResult<Vec<f64>> {
         let x = x.as_array();

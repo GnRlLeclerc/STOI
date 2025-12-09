@@ -24,7 +24,7 @@ pub fn compute_frame_rffts(frames: MatRef<f64>, mask: ColRef<bool>, count: usize
     let mut input_buffer = R2C.make_input_vec();
     let mut output_buffer = R2C.make_output_vec();
 
-    // Create output array as row-major for faster writes
+    // Create output array as column-major for faster writes
     let mut spectrogram = Mat::<f64>::zeros(FFT_BINS, count);
     let mut index = 0; // destination row index (skips invalid frames)
 
