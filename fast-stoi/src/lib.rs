@@ -2,6 +2,7 @@
 
 mod constants;
 mod errors;
+mod extended;
 mod frames;
 mod octave;
 mod resample;
@@ -15,7 +16,7 @@ use crate::{
 };
 
 /// Do the full computation post resampling to 10kHz
-fn compute(x: &[f32], y: &[f32]) -> Result<f32> {
+fn compute(x: &[f32], y: &[f32], extended: bool) -> Result<f32> {
     // Compute frames
     let (x_frames, y_frames, mask, count) = frames::process_frames(x, y);
 
@@ -35,10 +36,17 @@ fn compute(x: &[f32], y: &[f32]) -> Result<f32> {
     let mut x_segments = frames::segments(x_bands.transpose());
     let mut y_segments = frames::segments(y_bands.transpose());
 
-    Ok(standard::from_segments(
-        x_segments.as_mut(),
-        y_segments.as_mut(),
-    ))
+    if extended {
+        Ok(extended::from_segments(
+            x_segments.as_mut(),
+            y_segments.as_mut(),
+        ))
+    } else {
+        Ok(standard::from_segments(
+            x_segments.as_mut(),
+            y_segments.as_mut(),
+        ))
+    }
 }
 
 /// Compute the Short-Time Objective Intelligibility (STOI) measure between two signals.
@@ -58,8 +66,8 @@ pub fn stoi(x: &[f32], y: &[f32], fs_sig: usize, extended: bool) -> Result<f32> 
         let x = resample::resample(x, fs_sig, FS);
         let y = resample::resample(y, fs_sig, FS);
 
-        compute(&x, &y)
+        compute(&x, &y, extended)
     } else {
-        compute(x, y)
+        compute(x, y, extended)
     }
 }

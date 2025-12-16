@@ -3,6 +3,8 @@ from pystoi import stoi as theirs
 
 from fast_stoi import stoi as ours
 
+# TODO: test extended STOI
+
 
 def test_standard():
     np.random.seed(42)

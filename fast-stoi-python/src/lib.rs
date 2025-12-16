@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 /// Python bindings for fast-stoi
 #[pymodule]
-mod fast_stoi_python {
+mod fast_stoi {
     use numpy::ndarray::parallel::prelude::*;
     use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyReadonlyArray2};
     use pyo3::{exceptions::PyWarning, prelude::*};
@@ -14,7 +14,7 @@ mod fast_stoi_python {
         fs_sig: usize,
         extended: bool,
     ) -> PyResult<f32> {
-        match fast_stoi::stoi(
+        match lib_fast_stoi::stoi(
             x.as_slice().expect("x is not contiguous"),
             y.as_slice().expect("y is not contiguous"),
             fs_sig,
@@ -40,7 +40,7 @@ mod fast_stoi_python {
             .into_par_iter()
             .zip(y.outer_iter().into_par_iter())
             .map(|(x, y)| {
-                match fast_stoi::stoi(
+                match lib_fast_stoi::stoi(
                     x.as_slice().expect("x is not contiguous"),
                     y.as_slice().expect("y is not contiguous"),
                     fs_sig,

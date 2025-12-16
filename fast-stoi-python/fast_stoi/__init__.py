@@ -4,8 +4,8 @@ import warnings
 
 import numpy as np
 
-from .fast_stoi_python import par_stoi as par_stoi_internal  # type: ignore
-from .fast_stoi_python import stoi as stoi_internal  # type: ignore
+from .fast_stoi import par_stoi as par_stoi_internal  # type: ignore
+from .fast_stoi import stoi as stoi_internal  # type: ignore
 
 __all__ = ["stoi", "STOI"]
 
@@ -16,9 +16,7 @@ ERROR_MESSAGE = (
 )
 
 
-def stoi(
-    x: np.ndarray, y: np.ndarray, fs_sig: int, extended=False
-) -> float | np.ndarray:
+def stoi(x: np.ndarray, y: np.ndarray, fs_sig: int, extended=False) -> np.ndarray:
     """
     Compute the Short-Time Objective Intelligibility (STOI) measure between two signals.
     Args:
@@ -44,10 +42,12 @@ def stoi(
         return out
 
     try:
-        return stoi_internal(x, y, fs_sig, extended)
+        out = stoi_internal(x, y, fs_sig, extended)
     except Warning:
         warnings.warn(ERROR_MESSAGE)
-        return 1e-5
+        out = 1e-5
+
+    return np.array(out)
 
 
 try:
