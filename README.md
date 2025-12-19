@@ -52,7 +52,7 @@ Run on a plugged-in Lenovo Yoga Slim 7 Pro X laptop
 
 Parameters:
 
-- 3s audio samples at 8000Hz audio, as f32
+- 3s audio samples at 8000Hz as f32
 - batches of 16 elements
 
 The `torch_stoi` and `pystoi` version are run without parallelism
