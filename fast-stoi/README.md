@@ -1,10 +1,5 @@
 # Fast STOI
 
-TODO : un truc personnalisé pour rust.
-refer to the root readme for benchmark results and optimizations
-
--> tout copier coller, rajouter un guide pour l'utilisation en rust.
-
 ## Installation
 
 ```bash
